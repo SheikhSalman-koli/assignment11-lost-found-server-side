@@ -33,24 +33,32 @@ async function run() {
     })
     // get all item & search
     app.get('/allitem', async (req, res) => {
-      const { searchParams } = req.query
+      const { searchParams, sortParams } = req.query
       // console.log(searchParams);
       // search based on title and location
+      // console.log(searchParams,sortParams);
       let query = {}
       if (searchParams) {
-
-         query = {
+        query = {
           $or:
-          [
-             { title: { $regex: searchParams, $options: "i" } },
-
-           { location: { $regex: searchParams, $options: "i" } }
-          ]
-        }  
-
+            [
+              { title: { $regex: searchParams, $options: "i" } },
+              { location: { $regex: searchParams, $options: "i" } }
+            ]
+        }
       }
 
-      const result = await itemsCollection.find(query).toArray()
+      let sortQuery = {}
+
+      if (sortParams === 'latest') {
+        sortQuery = { date: -1 }
+      } else if (sortParams === 'oldest') {
+        sortQuery = { data: 1 }
+      } else if (sortParams === 'alphabetical') {
+        sortQuery = { title: 1 }
+      }
+
+      const result = await itemsCollection.find(query).sort(sortQuery).toArray()
       res.send(result)
     })
     // veiw details
@@ -62,7 +70,7 @@ async function run() {
     })
     // my items
     app.get('/myitem/:email', async (req, res) => {
-      const email = req.params.email
+      const email = req?.params.email
       const filter = { email: email }
       const result = await itemsCollection.find(filter).toArray()
       res.send(result)
@@ -116,7 +124,7 @@ async function run() {
 
     // latesst items sorted by date
     app.get('/latest', async (req, res) => {
-      const result = await itemsCollection.find().sort({ date: -1 }).limit(6).toArray()
+      const result = await itemsCollection.find().sort({ date: -1 }).limit(8).toArray()
       res.send(result)
     })
 
