@@ -34,79 +34,79 @@ async function run() {
 
 
     // get all unrecovered items & search
-app.get('/AllIUnrecoveredItem', async (req, res) => {
-  const { searchParams, sortParams } = req.query;
+    app.get('/AllIUnrecoveredItem', async (req, res) => {
+      const { searchParams, sortParams } = req.query;
 
-  // Base query: only items NOT recovered
-  let query = { status: { $ne: "recovered" } }; // <-- important
+      // Base query: only items NOT recovered
+      let query = { status: { $ne: "recovered" } }; // <-- important
 
-  // Add search filtering if searchParams exists
-  if (searchParams) {
-    query = {
-      ...query, // keep status filter
-      $or: [
-        { title: { $regex: searchParams, $options: "i" } },
-        { location: { $regex: searchParams, $options: "i" } }
-      ]
-    };
-  }
+      // Add search filtering if searchParams exists
+      if (searchParams) {
+        query = {
+          ...query, // keep status filter
+          $or: [
+            { title: { $regex: searchParams, $options: "i" } },
+            { location: { $regex: searchParams, $options: "i" } }
+          ]
+        };
+      }
 
-  // Sorting
-  let sortQuery = {};
-  if (sortParams === 'latest') {
-    sortQuery = { date: -1 };
-  } else if (sortParams === 'oldest') {
-    sortQuery = { date: 1 }; // corrected "data" -> "date"
-  } else if (sortParams === 'alphabetical') {
-    sortQuery = { title: 1 };
-  }
+      // Sorting
+      let sortQuery = {};
+      if (sortParams === 'latest') {
+        sortQuery = { date: -1 };
+      } else if (sortParams === 'oldest') {
+        sortQuery = { date: 1 }; // corrected "data" -> "date"
+      } else if (sortParams === 'alphabetical') {
+        sortQuery = { title: 1 };
+      }
 
-  try {
-    const result = await itemsCollection.find(query).sort(sortQuery).toArray();
-    res.send(result);
-  } catch (error) {
-    res.status(500).send({ success: false, error: error.message });
-  }
-});
+      try {
+        const result = await itemsCollection.find(query).sort(sortQuery).toArray();
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({ success: false, error: error.message });
+      }
+    });
 
 
-// get all recovered items
-app.get('/allRecoveredItem', async (req, res) => {
-  const { searchParams, sortParams } = req.query;
+    // get all recovered items
+    app.get('/allRecoveredItem', async (req, res) => {
+      const { searchParams, sortParams } = req.query;
 
-  // Base query: only items NOT recovered
-  let query = { }; // <-- important
+      // Base query: only items NOT recovered
+      let query = {}; // <-- important
 
-  // Add search filtering if searchParams exists
-  if (searchParams) {
-    query = {
-      ...query, // keep status filter
-      $or: [
-        { title: { $regex: searchParams, $options: "i" } },
-        { location: { $regex: searchParams, $options: "i" } },
-        { recoveredLocation: { $regex: searchParams, $options: "i" } },
-        { category: { $regex: searchParams, $options: "i" } }
-      ]
-    };
-  }
+      // Add search filtering if searchParams exists
+      if (searchParams) {
+        query = {
+          ...query, // keep status filter
+          $or: [
+            { title: { $regex: searchParams, $options: "i" } },
+            { location: { $regex: searchParams, $options: "i" } },
+            { recoveredLocation: { $regex: searchParams, $options: "i" } },
+            { category: { $regex: searchParams, $options: "i" } }
+          ]
+        };
+      }
 
-  // Sorting
-  let sortQuery = {};
-  if (sortParams === 'latest') {
-    sortQuery = { recoverdDate: -1 };
-  } else if (sortParams === 'oldest') {
-    sortQuery = { recoverdDate: 1 }; // corrected "data" -> "date"
-  } else if (sortParams === 'alphabetical') {
-    sortQuery = { title: 1 };
-  }
+      // Sorting
+      let sortQuery = {};
+      if (sortParams === 'latest') {
+        sortQuery = { recoverdDate: -1 };
+      } else if (sortParams === 'oldest') {
+        sortQuery = { recoverdDate: 1 }; // corrected "data" -> "date"
+      } else if (sortParams === 'alphabetical') {
+        sortQuery = { title: 1 };
+      }
 
-  try {
-    const result = await recoveredCollection.find(query).sort(sortQuery).toArray();
-    res.send(result);
-  } catch (error) {
-    res.status(500).send({ success: false, error: error.message });
-  }
-});
+      try {
+        const result = await recoveredCollection.find(query).sort(sortQuery).toArray();
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({ success: false, error: error.message });
+      }
+    });
 
 
 
@@ -183,6 +183,67 @@ app.get('/allRecoveredItem', async (req, res) => {
       const result = await itemsCollection.find(query).sort({ date: -1 }).limit(8).toArray()
       res.send(result)
     })
+
+// analitics
+    app.get("/items/analytics", async (req, res) => {
+  try {
+    const totalItems = await itemsCollection.countDocuments({});
+    const lostItems = await itemsCollection.countDocuments({ type: "Lost" });
+    const foundItems = await itemsCollection.countDocuments({ type: "Found" });
+    const recoveredItems = await recoveredCollection.countDocuments();
+    const unrecoveredItems = await itemsCollection.countDocuments({ status: { $ne: "recovered" } });
+
+    const recoveredLost = await itemsCollection.countDocuments({
+      type: "Lost",
+      status: "recovered",
+    });
+    const recoveredFound = await itemsCollection.countDocuments({
+      type: "Found",
+      status: "recovered",
+    });
+
+    // Count items per category
+    const categoriesAggregation = await itemsCollection
+      .aggregate([
+        { $group: { _id: "$category", count: { $sum: 1 } } },
+      ])
+      .toArray();
+
+    const categories = {};
+    categoriesAggregation.forEach((cat) => {
+      categories[cat._id] = cat.count;
+    });
+
+    // Count items per location (optional)
+    const locationsAggregation = await itemsCollection
+      .aggregate([
+        { $group: { _id: "$location", count: { $sum: 1 } } },
+      ])
+      .toArray();
+    
+    const locations = {};
+    locationsAggregation.forEach((loc) => {
+      locations[loc._id] = loc.count;
+    });
+
+    res.send({
+      totalItems,
+      lostItems,
+      foundItems,
+      recoveredItems,
+      unrecoveredItems,
+      recoveredLost,
+      recoveredFound,
+      categories,
+      locations,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).send({ success: false, message: error.message });
+  }
+});
+
+
 
     // Send a ping to confirm a successful connection
     // await client.db("admin").command({ ping: 1 });
